@@ -138,7 +138,7 @@ func buildJSONSchema(ctx context.Context, config *Config) (*Schema, error) {
 	} else if config.NoAdditionalProperties {
 		// The root carries a $ref of its own when --schema-root.ref is used, so it needs
 		// the same applicator-aware treatment as every node below it.
-		closeObject(mergedSchema, config.Draft)
+		setNoAdditionalProperties(mergedSchema, config.Draft)
 	}
 
 	// Ensure merged Schema is JSON Schema compliant
@@ -198,11 +198,18 @@ func WriteOutput(ctx context.Context, mergedSchema *Schema, outputPath, indent s
 	return nil
 }
 
+//gosec:disable G304 -- path is provided by the user, but that's intentional.
 func writeOutputFile(stdout io.Writer, path string, content []byte) error {
 	if path == "-" {
 		if _, err := stdout.Write(content); err != nil {
 			return fmt.Errorf("write schema to stdout: %w", err)
 		}
+		return nil
+	}
+
+	// Don't touch the file if its content is already up to date, so that
+	// modification times stay stable for tooling that watches the file.
+	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, content) {
 		return nil
 	}
 
